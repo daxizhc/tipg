@@ -159,6 +159,13 @@ class PostgresSettings(BaseSettings):
         )
 
 
+class MultiPostgresSettings(BaseSettings):
+
+    database_url_list: Optional[List[str]] = []
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+
 class DatabaseSettings(BaseSettings):
     """TiPg Database settings."""
 

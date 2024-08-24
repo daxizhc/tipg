@@ -4,6 +4,10 @@ from contextlib import asynccontextmanager
 from typing import Any, List
 
 import jinja2
+from fastapi import FastAPI, Request
+from starlette.middleware.cors import CORSMiddleware
+from starlette.templating import Jinja2Templates
+from starlette_cramjam.middleware import CompressionMiddleware
 
 from tipg import __version__ as tipg_version
 from tipg.collections import register_collection_catalog
@@ -15,19 +19,14 @@ from tipg.settings import (
     APISettings,
     CustomSQLSettings,
     DatabaseSettings,
-    PostgresSettings,
+    PostgresSettings, MultiPostgresSettings,
 )
-
-from fastapi import FastAPI, Request
-
-from starlette.middleware.cors import CORSMiddleware
-from starlette.templating import Jinja2Templates
-from starlette_cramjam.middleware import CompressionMiddleware
 
 settings = APISettings()
 postgres_settings = PostgresSettings()
 db_settings = DatabaseSettings()
 custom_sql_settings = CustomSQLSettings()
+multi_postgres_settings = MultiPostgresSettings()
 
 
 @asynccontextmanager
@@ -37,6 +36,7 @@ async def lifespan(app: FastAPI):
     await connect_to_db(
         app,
         settings=postgres_settings,
+        multi_postgres_settings=multi_postgres_settings,
         schemas=db_settings.schemas,
         user_sql_files=custom_sql_settings.sql_files,
     )
@@ -136,11 +136,11 @@ def ping():
 
 
 if settings.debug:
-
     @app.get("/rawcatalog", tags=["debug"])
     async def raw_catalog(request: Request):
         """Return parsed catalog data for testing."""
         return request.app.state.collection_catalog
+
 
     @app.get("/refresh", tags=["debug"])
     async def refresh(request: Request):

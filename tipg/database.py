@@ -5,11 +5,10 @@ from typing import List, Optional
 
 import orjson
 from buildpg import asyncpg
+from fastapi import FastAPI
 
 from tipg.logger import logger
-from tipg.settings import PostgresSettings
-
-from fastapi import FastAPI
+from tipg.settings import PostgresSettings, MultiPostgresSettings
 
 try:
     from importlib.resources import files as resources_files  # type: ignore
@@ -27,9 +26,9 @@ class connection_factory:
     user_sql_files: List[pathlib.Path]
 
     def __init__(
-        self,
-        schemas: Optional[List[str]] = None,
-        user_sql_files: Optional[List[pathlib.Path]] = None,
+            self,
+            schemas: Optional[List[str]] = None,
+            user_sql_files: Optional[List[pathlib.Path]] = None,
     ) -> None:
         """Init."""
         self.schemas = schemas or []
@@ -68,11 +67,12 @@ class connection_factory:
 
 
 async def connect_to_db(
-    app: FastAPI,
-    settings: Optional[PostgresSettings] = None,
-    schemas: Optional[List[str]] = None,
-    user_sql_files: Optional[List[pathlib.Path]] = None,
-    **kwargs,
+        app: FastAPI,
+        settings: Optional[PostgresSettings] = None,
+        multi_postgres_settings: Optional[MultiPostgresSettings] = None,
+        schemas: Optional[List[str]] = None,
+        user_sql_files: Optional[List[pathlib.Path]] = None,
+        **kwargs,
 ) -> None:
     """Connect."""
     if not settings:
@@ -89,6 +89,20 @@ async def connect_to_db(
         init=con_init,
         **kwargs,
     )
+
+    if multi_postgres_settings and len(multi_postgres_settings.database_url_list) > 0:
+        pool_list = []
+        for database_url in multi_postgres_settings.database_url_list:
+            pool = await asyncpg.create_pool_b(
+                database_url,
+                min_size=settings.db_min_conn_size,
+                max_size=settings.db_max_conn_size,
+                max_queries=settings.db_max_queries,
+                max_inactive_connection_lifetime=settings.db_max_inactive_conn_lifetime,
+                init=con_init,
+                **kwargs, )
+            pool_list.append(pool)
+        app.state.pool_list = pool_list
 
 
 async def close_db_connection(app: FastAPI) -> None:
