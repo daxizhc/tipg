@@ -1586,8 +1586,12 @@ class OGCTilesFactory(EndpointsFactory):
             """Return Vector Tile."""
             tms = self.supported_tms.get(tileMatrixSetId)
 
+            pool = request.app.state.collection_pool_map[collection.id]
+            if pool is None:
+                raise NotFound("Pool not found")
+
             tile = await collection.get_tile(
-                pool=request.app.state.pool,
+                pool=pool,
                 tms=tms,
                 tile=tile,
                 ids_filter=ids_filter,
