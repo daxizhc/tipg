@@ -9,6 +9,7 @@ from buildpg import asyncpg, clauses
 from buildpg import funcs as pg_funcs
 from buildpg import logic, render
 from ciso8601 import parse_rfc3339
+from fastapi import FastAPI
 from morecantile import Tile, TileMatrixSet
 from pydantic import BaseModel, Field, model_validator
 from pygeofilter.ast import AstType
@@ -26,8 +27,6 @@ from tipg.filter.filters import bbox_to_wkt
 from tipg.logger import logger
 from tipg.model import Extent
 from tipg.settings import FeaturesSettings, MVTSettings, TableConfig, TableSettings
-
-from fastapi import FastAPI
 
 mvt_settings = MVTSettings()
 features_settings = FeaturesSettings()
@@ -999,4 +998,15 @@ async def get_collection_index(  # noqa: C901
 
 async def register_collection_catalog(app: FastAPI, **kwargs: Any) -> None:
     """Register Table catalog."""
-    app.state.collection_catalog = await get_collection_index(app.state.pool, **kwargs)
+    compose_collection_catalog = {"last_updated": None, "collections": {}}
+    collection_pool_map = {}
+
+    for pool in app.state.pool_list:
+        collection_catalog = await get_collection_index(pool, **kwargs)
+        collections = collection_catalog["collections"]
+        compose_collection_catalog["last_updated"] = collection_catalog["last_updated"]
+        compose_collection_catalog["collections"].update(collections)
+        for key in collections.keys():
+            collection_pool_map[key] = pool
+    app.state.collection_catalog = compose_collection_catalog
+    app.state.collection_pool_map = collection_pool_map

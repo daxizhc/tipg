@@ -9,10 +9,17 @@ from urllib.parse import urlencode
 
 import jinja2
 import orjson
+from fastapi import APIRouter, Depends, Path, Query
+from fastapi.responses import ORJSONResponse
 from morecantile import Tile, TileMatrixSet
 from morecantile import tms as default_tms
 from morecantile.defaults import TileMatrixSets
 from pygeofilter.ast import AstType
+from starlette.datastructures import QueryParams
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, Response, StreamingResponse
+from starlette.routing import compile_path, replace_params
+from starlette.templating import Jinja2Templates, _TemplateResponse
 from typing_extensions import Annotated
 
 from tipg import model
@@ -38,25 +45,14 @@ from tipg.resources.enums import MediaType
 from tipg.resources.response import GeoJSONResponse, SchemaJSONResponse, orjsonDumps
 from tipg.settings import FeaturesSettings, MVTSettings, TMSSettings
 
-from fastapi import APIRouter, Depends, Path, Query
-from fastapi.responses import ORJSONResponse
-
-from starlette.datastructures import QueryParams
-from starlette.requests import Request
-from starlette.responses import HTMLResponse, Response, StreamingResponse
-from starlette.routing import compile_path, replace_params
-from starlette.templating import Jinja2Templates, _TemplateResponse
-
 tms_settings = TMSSettings()
 mvt_settings = MVTSettings()
 features_settings = FeaturesSettings()
-
 
 jinja2_env = jinja2.Environment(
     loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])
 )
 DEFAULT_TEMPLATES = Jinja2Templates(env=jinja2_env)
-
 
 COMMON_CONFORMS = [
     "http://www.opengis.net/spec/ogcapi-common-1/1.0/conf/core",
@@ -752,8 +748,12 @@ class OGCFeaturesFactory(EndpointsFactory):
                 MediaType.html,
             ]
 
+            pool = request.app.state.collection_pool_map[collection.id]
+            if pool is None:
+                raise NotFound("Pool not found")
+
             item_list = await collection.features(
-                request.app.state.pool,
+                pool,
                 ids_filter=ids_filter,
                 bbox_filter=bbox_filter,
                 datetime_filter=datetime_filter,
@@ -1004,8 +1004,12 @@ class OGCFeaturesFactory(EndpointsFactory):
                 MediaType.html,
             ]
 
+            pool = request.app.state.collection_pool_map[collection.id]
+            if pool is None:
+                raise NotFound("Pool not found")
+
             item_list = await collection.features(
-                pool=request.app.state.pool,
+                pool=pool,
                 bbox_only=bbox_only,
                 simplify=simplify,
                 ids_filter=[itemId],
